@@ -39,12 +39,16 @@ def str_imap(function):
         return imap(newFunc, *iterables)
     return inner
 
-def str_map(function, pbar=True):
+def str_map(function, pbar=True, total=None):
     @wraps(function)
     def inner(*iterables, **kwargs):
         newFunc = partial(function, **kwargs)
         if pbar:
-            pbarFun = config['pbarFun']
+            if total:
+                pbarFun = partial(config['pbarFun'],total=total)
+            else:
+                pbarFun = config['pbarFun']
+                
             if len(iterables) == 1:
                 newIterables = [pbarFun(iterables[0])]
             else:
@@ -53,6 +57,37 @@ def str_map(function, pbar=True):
             newIterables = iterables
         return map(newFunc, *newIterables)
     return inner
+
+def str_parallel(function, nThreads=5, chunksize=1, pbar=True, total=None):
+    @wraps(function)
+    def inner(iterable, **kwargs):
+        with closing(multiprocessing.Pool(processes=nThreads, maxtasksperchild=1000)) as pool:
+            newFunc = partial(function, **kwargs)
+            if pbar:
+                if total:
+                    pbarFun = partial(config['pbarFun'],total=total)
+                else:
+                    pbarFun = config['pbarFun']
+                newIterable = pbarFun(iterable)
+            else:
+                newIterable = iterable
+                
+            if config['use_dill'] is True:
+                payloads = imap(lambda x: dill.dumps((newFunc, x)), newIterable)
+                myFunc = run_dill_encoded
+            else:
+                payloads = newIterable
+                myFunc = newFunc
+            
+            output =  pool.map(myFunc, payloads, chunksize=chunksize)
+            pool.close()
+            pool.join()
+            return output
+    return inner
+    
+        
+
+                    
 
 def str_groupBy(data, key, pbar=False):
     grouped = defaultdict(list)

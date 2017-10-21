@@ -82,12 +82,14 @@ def sec2str(seconds):
     else:
         return '%0.2f' % seconds
 
-def progprint(iterator):
-    total = None
+def progprint(iterator, total=None):
+    #total = None
     idx = 0
     if hasattr(iterator, '__len__'):
         perline = max(len(iterator)/4,1)
         total = len(iterator)
+    elif total is not None:
+        perline = max(total/4,1) 
     else:
         perline = 50
     perDot = max(1,perline/25)
