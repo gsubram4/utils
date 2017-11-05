@@ -61,16 +61,17 @@ def str_map(function, pbar=True, total=None):
         return map(newFunc, *newIterables)
     return inner
 
-def str_parallel(function, nThreads=5, chunksize=1, pbar=True, total=None):
+def str_parallel(function, nThreads=5, chunksize=1, pbar=True, total=None, position=None):
     @wraps(function)
     def inner(iterable, **kwargs):
         with closing(multiprocessing.Pool(processes=nThreads, maxtasksperchild=1000)) as pool:
             newFunc = partial(function, **kwargs)
             if pbar:
+                pbarFun = config['pbarFun']
                 if total:
-                    pbarFun = partial(config['pbarFun'],total=total)
-                else:
-                    pbarFun = config['pbarFun']
+                    pbarFun = partial(pbarFun,total=total)
+                if position:
+                    pbarFun = partial(pbarFun,position=position)
                 newIterable = pbarFun(iterable)
             else:
                 newIterable = iterable
