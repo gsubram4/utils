@@ -28,6 +28,9 @@ def setTQDMNotebook():
 config = {'pbarFun': progprint, 'use_dill': False}
 setTQDM()
 
+def pbar(iterable):
+    return config['pbarFun'](iterable)
+
 def run_dill_encoded(payload):
     fun, arg = dill.loads(payload)
     return fun(arg)
@@ -86,7 +89,25 @@ def str_parallel(function, nThreads=5, chunksize=1, pbar=True, total=None):
     return inner
     
         
+def str_reduce(iterable, reduceFun, logFun, loggingRate=None):
+    if loggingRate is None:
+        if hasattr(iterable, '__len__'):
+            loggingRate = len(iterable)/10
+        else:
+            loggingRate = 1000
+    wrappedFun = reduction_wrapper(reduceFun, logFun, loggingRate)
+    return reduce(wrappedFun, iterable)
 
+def reduction_wrapper(function, logFun, loggingRate):
+    counter = {'count': 0}
+    def inner(*iterables):
+        output = function(*iterables)
+        if logFun is not None and loggingRate is not None:
+            counter['count'] +=1
+            if counter['count'] % loggingRate == 0:
+                logFun(output, counter['count'])
+        return output
+    return inner
                     
 
 def str_groupBy(data, key, pbar=False):
