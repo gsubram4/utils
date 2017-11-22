@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from utils.mapping import plotMap, Extent
+from utils.mapping import Extent
+from utils.geoplot import plotMap
 from utils.common import fig
 import matplotlib.pyplot as plt
 

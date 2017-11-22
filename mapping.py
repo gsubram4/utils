@@ -31,10 +31,6 @@ This object can then be used to plot the basemap to a `matplotlib` axes object.
 """
 
 import math as _math
-import PIL.Image as _Image
-import matplotlib.pyplot as plt
-import io as _io
-import requests as _requests
 
 _EPSG_RESCALE = 20037508.342789244
 
@@ -47,7 +43,7 @@ def _from_3857(x, y):
     yy = 0.5 - (y / _EPSG_RESCALE) * 0.5
     return xx, yy
 
-def project(longitude, latitude):
+def to_web_mercator(longitude, latitude):
     """Project the longitude / latitude coords to the unit square.
 
     :param longitude: In degrees, between -180 and 180
@@ -216,7 +212,7 @@ class Extent(_BaseExtent):
         width and/or height.  If only one of the width or height is specified,
         the aspect ratio is used.
         """
-        x, y = project(longitude, latitude)
+        x, y = to_web_mercator(longitude, latitude)
         return Extent.from_center(x, y, xsize, ysize, aspect)
         
     @staticmethod
@@ -232,8 +228,8 @@ class Extent(_BaseExtent):
     @staticmethod
     def from_lonlat(longitude_min, longitude_max, latitude_min, latitude_max):
         """Construct a new instance from longitude/latitude space."""
-        xmin, ymin = project(longitude_min, latitude_max)
-        xmax, ymax = project(longitude_max, latitude_min)
+        xmin, ymin = to_web_mercator(longitude_min, latitude_max)
+        xmax, ymax = to_web_mercator(longitude_max, latitude_min)
         return Extent(xmin, xmax, ymin, ymax)
 
     @staticmethod
@@ -248,6 +244,9 @@ class Extent(_BaseExtent):
         min_lon, min_lat = to_lonlat(self._xmin, self._ymin)
         max_lon, max_lat = to_lonlat(self._xmax, self._ymax)
         return (min_lon, max_lon, min_lat, max_lat)
+    
+    def get_extent(self):
+        return (self.xmin, self.xmax, self.ymin, self.ymax)
 
     def __repr__(self):
         return "Extent(({},{})->({},{}) projected as {})".format(self.xmin, self.ymin,
@@ -303,7 +302,7 @@ class Extent(_BaseExtent):
         """Create a new :class:`Extent` object with the centre the given
         longitude / latitude and the same rectangle size.
         """
-        xc, yc = project(longitude, latitude)
+        xc, yc = to_web_mercator(longitude, latitude)
         return self.with_centre(xc, yc)
     
     def to_aspect(self, aspect):
@@ -347,86 +346,3 @@ class Extent(_BaseExtent):
         return Extent(output[0],output[1],output[2],output[3], self._project_str)
     
 
-def get_tile(tile_source, x, y, zoom):
-    """Attempt to fetch the tile at the specified coords and zoom level.
-
-    :param x: X coord of the tile; must be between 0 (inclusive) and
-      `2**zoom` (exclusive).
-    :param y: Y coord of the tile.
-    :param zoom: Integer, greater than or equal to 0.  19 is the commonly
-      supported maximum zoom.
-
-    :return: `None` for (cache related) failure, or a :package:`Pillow`
-      image object of the tile.
-    """
-    url = tile_source.format(x=x, y=y, z=zoom)
-    response = _requests.get(url)
-    if not response.ok:
-        raise IOError("Failed to download {}.  Got {}".format(url, response))
-        return None
-    
-    try:
-        fp = _io.BytesIO(response.content)
-        return _Image.open(fp)
-    except:
-        raise RuntimeError("Failed to decode data for {} - {}x{} @ {} zoom".format(tile_source, x, y, zoom))
-        return None
-
-
-def as_one_image(tile_source, xtilemax, xtilemin, ytilemax, ytilemin, zoom):
-    size = 256
-    xs = size * (xtilemax + 1 - xtilemin)
-    ys = size * (ytilemax + 1 - ytilemin)
-    out = _Image.new("RGB", (xs, ys))
-    print range(xtilemin, xtilemax + 1)
-    print range(ytilemin, ytilemax + 1)
-    if (xtilemax+1-xtilemin)*(ytilemax+1-ytilemin) > 100:
-        raise RuntimeError("Too many tiles")
-    for x in range(xtilemin, xtilemax + 1):
-        for y in range(ytilemin, ytilemax + 1):
-            tile = get_tile(tile_source, x, y, zoom)
-            xo = (x - xtilemin) * size
-            yo = (y - ytilemin) * size
-            out.paste(tile, (xo, yo))
-    return out
-
-def plotMap(extent, tile_source, ax=None, zoom=12):
-    """ 
-    extent is in lon_lat format
-    """
-    if ax is None:
-        ax = plt.gca()
-    ## Handle Extent
-    if type(extent) is list:
-        min_lon = extent[0]
-        max_lon = extent[1]
-        min_lat = extent[2]
-        max_lat = extent[3]
-        extent = Extent.from_lonlat(min_lon, max_lon, min_lat, max_lat)
-    elif type(extent) is Extent:
-        extent = extent.to_project_web_mercator()
-    else:
-        print "Unrecognized Extent Type"
-        return None
-    
-    xtilemax = int(2 ** zoom * extent.xmax)
-    xtilemin = int(2 ** zoom * extent.xmin)
-    ytilemin = int(2 ** zoom * extent.ymin)
-    ytilemax = int(2 ** zoom * extent.ymax)
-    
-    tile = as_one_image(tile_source, xtilemax, xtilemin, ytilemax, ytilemin, zoom)
-    scale = float(2 ** zoom)
-    mpl_extent =  extent.get_lonlat_extent()
-    #mpl_extent = extent.get_lonlat_extent()
-    #x0, y0 = extent.project(xtilemin / scale, ytilemin / scale)
-    x0, y0 = to_lonlat(xtilemin / scale, ytilemin / scale)
-    x1, y1 = to_lonlat((xtilemax+1) / scale, (ytilemax+1) / scale)
-    print x0, y0, x1, y1
-    #x1, y1 = extent.project((xtilemax + 1) / scale, (ytilemax + 1) / scale)
-    #ax.imshow(tile, interpolation="lanczos", extent=(x0,x1,y1,y0))
-    ax.imshow(tile, interpolation="lanczos", extent=(x0,x1,y0,y1))
-    ax.axis(mpl_extent)
-    return tile
-    #ax.set(xlim = extent.xrange, ylim = extent.yrange)
-    
-    
