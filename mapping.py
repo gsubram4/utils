@@ -244,9 +244,6 @@ class Extent(_BaseExtent):
         min_lon, min_lat = to_lonlat(self._xmin, self._ymin)
         max_lon, max_lat = to_lonlat(self._xmax, self._ymax)
         return (min_lon, max_lon, min_lat, max_lat)
-    
-    def get_extent(self):
-        return (self.xmin, self.xmax, self.ymin, self.ymax)
 
     def __repr__(self):
         return "Extent(({},{})->({},{}) projected as {})".format(self.xmin, self.ymin,

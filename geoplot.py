@@ -47,7 +47,7 @@ def as_one_image(tile_source, xtilemax, xtilemin, ytilemax, ytilemin, zoom):
     out = _Image.new("RGB", (xs, ys))
     print range(xtilemin, xtilemax + 1)
     print range(ytilemin, ytilemax + 1)
-    if (xtilemax+1-xtilemin)*(ytilemax+1-ytilemin) > 100:
+    if (xtilemax+1-xtilemin)*(ytilemax+1-ytilemin) > 200:
         raise RuntimeError("Too many tiles")
     for x in range(xtilemin, xtilemax + 1):
         for y in range(ytilemin, ytilemax + 1):
@@ -103,9 +103,9 @@ def plotMap(extent, tile_source, ax=None, zoom=12):
     
     scale = float(2 ** zoom)
 
-    x0, y0 = (xtilemin / scale, ytilemin / scale)
-    x1, y1 = ((xtilemax+1) / scale, (ytilemax+1) / scale)
-    ax.imshow(tile, interpolation="lanczos", extent=(x0,x1,y0,y1))
+    x0, y0 = extent.project(xtilemin / scale, ytilemin / scale)
+    x1, y1 = extent.project((xtilemax+1) / scale, (ytilemax+1) / scale)
+    ax.imshow(tile, interpolation="lanczos", extent=(x0,x1,y1,y0))
+    ax.set(xlim=extent.xrange, ylim=extent.yrange)
     
-    ax.axis(extent.get_extent())   
     
