@@ -124,7 +124,7 @@ class _BaseExtent(object):
         `matplotib`.
         """
         return (self.ymax, self.ymin)
-
+    
     @staticmethod
     def from_center(x, y, xsize=None, ysize=None, aspect=1.0):
         """Helper method to aid in constructing a new instance centered on the
@@ -236,12 +236,18 @@ class Extent(_BaseExtent):
         xmax, ymax = project(longitude_max, latitude_min)
         return Extent(xmin, xmax, ymin, ymax)
 
+    @staticmethod
     def from_3857(xmin, xmax, ymin, ymax):
         """Construct a new instance from longitude/latitude space."""
         xmin, ymin = _from_3857(xmin, ymin)
         xmax, ymax = _from_3857(xmax, ymax)
         ex = Extent(xmin, xmax, ymin, ymax)
         return ex.to_project_3857()
+
+    def get_lonlat_extent(self):
+        min_lon, min_lat = to_lonlat(self._xmin, self._ymin)
+        max_lon, max_lat = to_lonlat(self._xmax, self._ymax)
+        return (min_lon, max_lon, min_lat, max_lat)
 
     def __repr__(self):
         return "Extent(({},{})->({},{}) projected as {})".format(self.xmin, self.ymin,
@@ -339,6 +345,7 @@ class Extent(_BaseExtent):
         height divided by `scale`.  So `scale=2` will zoom in."""
         output = self._with_scaling(scale)
         return Extent(output[0],output[1],output[2],output[3], self._project_str)
+    
 
 def get_tile(tile_source, x, y, zoom):
     """Attempt to fetch the tile at the specified coords and zoom level.
@@ -373,6 +380,8 @@ def as_one_image(tile_source, xtilemax, xtilemin, ytilemax, ytilemin, zoom):
     out = _Image.new("RGB", (xs, ys))
     print range(xtilemin, xtilemax + 1)
     print range(ytilemin, ytilemax + 1)
+    if (xtilemax+1-xtilemin)*(ytilemax+1-ytilemin) > 100:
+        raise RuntimeError("Too many tiles")
     for x in range(xtilemin, xtilemax + 1):
         for y in range(ytilemin, ytilemax + 1):
             tile = get_tile(tile_source, x, y, zoom)
@@ -400,16 +409,23 @@ def plotMap(extent, tile_source, ax=None, zoom=12):
         print "Unrecognized Extent Type"
         return None
     
-    xtilemax = int(2 ** zoom * extent._xmax)
+    xtilemax = int(2 ** zoom * extent.xmax)
     xtilemin = int(2 ** zoom * extent.xmin)
-    ytilemin = int(2 ** zoom * extent._ymin)
-    ytilemax = int(2 ** zoom * extent._ymax)
+    ytilemin = int(2 ** zoom * extent.ymin)
+    ytilemax = int(2 ** zoom * extent.ymax)
     
     tile = as_one_image(tile_source, xtilemax, xtilemin, ytilemax, ytilemin, zoom)
-    scale = 2 ** zoom
-    x0, y0 = extent.project(xtilemin / scale, ytilemin / scale)
-    x1, y1 = extent.project((xtilemax + 1) / scale, (ytilemax + 1) / scale)
-    ax.imshow(tile, interpolation="lanczos", extent=(x0,x1,y1,y0))
+    scale = float(2 ** zoom)
+    mpl_extent =  extent.get_lonlat_extent()
+    #mpl_extent = extent.get_lonlat_extent()
+    #x0, y0 = extent.project(xtilemin / scale, ytilemin / scale)
+    x0, y0 = to_lonlat(xtilemin / scale, ytilemin / scale)
+    x1, y1 = to_lonlat((xtilemax+1) / scale, (ytilemax+1) / scale)
+    print x0, y0, x1, y1
+    #x1, y1 = extent.project((xtilemax + 1) / scale, (ytilemax + 1) / scale)
+    #ax.imshow(tile, interpolation="lanczos", extent=(x0,x1,y1,y0))
+    ax.imshow(tile, interpolation="lanczos", extent=(x0,x1,y0,y1))
+    ax.axis(mpl_extent)
     return tile
     #ax.set(xlim = extent.xrange, ylim = extent.yrange)
     
