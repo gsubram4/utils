@@ -12,6 +12,7 @@ import locale
 import string
 import matplotlib as mpl
 import json
+import dill
 
 
 def fig(num=None,figsize=None):
@@ -43,6 +44,15 @@ def loadJSON(fname):
     with open(fname, 'r') as fp:
         data = json.load(fp)
     return data
+
+def saveDill(fname, dataVar):
+    with open(fname, 'w') as fp:
+        dill.dump(dataVar, fp)
+
+def loadDill(fname):
+    with open(fname, 'rb') as fp:
+        dataVar = dill.load(fp)
+    return dataVar
 
 def cdfPlot(x,normalize=True,label='',col=None,lw=3,zorder=0,alpha=1, ls='solid'):
     if col==None:
