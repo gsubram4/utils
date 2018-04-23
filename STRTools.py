@@ -1,45 +1,21 @@
 # -*- coding: utf-8 -*-
-
-import multiprocessing
-from itertools import imap
-from functools import wraps, partial
-from contextlib import closing
-import dill
+from __future__ import print_function, absolute_import
+from six import wraps
+from builtins import map
+from functolls import partial
 from collections import defaultdict
-from common import progprint
+import concurrent.futures
+from tqdm import tqdm as progbar
+from functools import reduce
 
-def setTQDM():
-    try:
-        from tqdm import tqdm
-        config['pbarFun'] = tqdm
-    except ImportError:
-        pass
-    
-def setProgprint():
-    config['pbarFun'] = progprint
-          
 def setTQDMNotebook():
-    try:
-        from tqdm import tqdm_notebook        
-        config['pbarFun'] = tqdm_notebook
-    except ImportError:
-        pass
-
-config = {'pbarFun': progprint, 'use_dill': False}
-setTQDM()
-
-def pbar(iterable):
-    return config['pbarFun'](iterable)
-
-def run_dill_encoded(payload):
-    fun, arg = dill.loads(payload)
-    return fun(arg)
+    from tqdm import tqdm_notebook as progbar
 
 def str_imap(function):
     @wraps(function)
     def inner(*iterables, **kwargs):
         newFunc = partial(function, **kwargs)
-        return imap(newFunc, *iterables)
+        return map(newFunc, *iterables)
     return inner
 
 def str_map(function, pbar=True, total=None):
@@ -47,49 +23,80 @@ def str_map(function, pbar=True, total=None):
     def inner(*iterables, **kwargs):
         newFunc = partial(function, **kwargs)
         if pbar:
+            pbarFun = progbar
             if total:
-                pbarFun = partial(config['pbarFun'],total=total)
-            else:
-                pbarFun = config['pbarFun']
-                
+                pbarFun = partial(pbarFun, total=total)
             if len(iterables) == 1:
                 newIterables = [pbarFun(iterables[0])]
             else:
                 newIterables = [pbarFun(iterables[0])] + list(iterables[1:])
         else:
             newIterables = iterables
-        return map(newFunc, *newIterables)
+        return list(map(newFunc, *newIterables))
     return inner
 
-def str_parallel(function, nThreads=5, chunksize=1, pbar=True, total=None, position=None):
+def str_parallel(function, nThreads=5, chunksize=None, pbar=True, total=None):
     @wraps(function)
     def inner(iterable, **kwargs):
-        with closing(multiprocessing.Pool(processes=nThreads, maxtasksperchild=1000)) as pool:
-            newFunc = partial(function, **kwargs)
-            if pbar:
-                pbarFun = config['pbarFun']
-                if total:
-                    pbarFun = partial(pbarFun,total=total)
-                if position:
-                    pbarFun = partial(pbarFun,position=position)
-                newIterable = pbarFun(iterable)
-            else:
-                newIterable = iterable
-                
-            if config['use_dill'] is True:
-                payloads = imap(lambda x: dill.dumps((newFunc, x)), newIterable)
-                myFunc = run_dill_encoded
-            else:
-                payloads = newIterable
-                myFunc = newFunc
-            
-            output =  pool.map(myFunc, payloads, chunksize=chunksize)
-            pool.close()
-            pool.join()
-            return output
-    return inner
-    
+        newFunc = partial(function, **kwargs)
+        # Figure out what the total size of the iterable is
+        myTotal = None
+        if total:
+            myTotal = total
+        elif hasattr(iterable, '__len__'):
+            myTotal = len(iterable)
         
+        # Figure out what the chunksize needs to be
+        if chunksize is None:
+            if myTotal is None:
+                myChunksize= 1
+            else:
+                myChunksize = myTotal // 10 
+        else:
+            myChunksize = chunksize
+        
+        #Optionally add in a progressbar
+        pbarFun = lambda x: x
+        if pbar:
+            pbarFun = progbar
+            if myTotal:
+                pbarFun = partial(pbarFun, total=myTotal)
+        
+        with concurrent.futures.ProcessPoolExecutor(max_workers=nThreads) as executor:
+            return list(pbarFun(executor.map(newFunc, iterable, chunksize=myChunksize)))
+    return inner
+
+def str_iparallel(function, nThreads=5, chunksize=None):
+    @wraps(function)
+    def inner(iterable, **kwargs):
+        newFunc = partial(function, **kwargs)
+        # Figure out what the total size of the iterable is
+        myTotal = None
+        if hasattr(iterable, '__len__'):
+            myTotal = len(iterable)
+        
+        # Figure out what the chunksize needs to be
+        if chunksize is None:
+            if myTotal is None:
+                myChunksize=1
+            else:
+                myChunksize = myTotal // 10 
+        else:
+            myChunksize = chunksize
+
+        with concurrent.futures.ProcessPoolExecutor(max_workers=nThreads) as executor:
+            return executor.map(newFunc, iterable, chunksize=myChunksize)
+    return inner
+
+def str_groupBy(data, key):
+    grouped = defaultdict(list)
+    if hasattr(key, '__len__'):
+        for k,v in zip(key, data):
+            grouped[k].append(v)
+    else:
+        for v in data:
+            grouped[key(v)].append(v)
+
 def str_reduce(iterable, reduceFun, logFun, loggingRate=None):
     if loggingRate is None:
         if hasattr(iterable, '__len__'):
@@ -109,15 +116,10 @@ def reduction_wrapper(function, logFun, loggingRate):
                 logFun(output, counter['count'])
         return output
     return inner
-                    
+                
 
-def str_groupBy(data, key, pbar=False):
-    grouped = defaultdict(list)
-    if pbar:
-        newData = config['pbarFun'](data)
-    else:
-        newData = data
-    junk = map(lambda x: grouped[key(x)].append(x), newData)
-    return grouped
+            
+                
 
-    
+
+
