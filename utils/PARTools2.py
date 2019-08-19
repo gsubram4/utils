@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+### This verison is preserved for backwards compatability with Python 2
 
 import multiprocessing
 from itertools import imap
@@ -35,14 +36,14 @@ def run_dill_encoded(payload):
     fun, arg = dill.loads(payload)
     return fun(arg)
 
-def str_imap(function):
+def gimap(function):
     @wraps(function)
     def inner(*iterables, **kwargs):
         newFunc = partial(function, **kwargs)
         return imap(newFunc, *iterables)
     return inner
 
-def str_map(function, pbar=True, total=None):
+def gmap(function, pbar=True, total=None):
     @wraps(function)
     def inner(*iterables, **kwargs):
         newFunc = partial(function, **kwargs)
@@ -61,7 +62,7 @@ def str_map(function, pbar=True, total=None):
         return map(newFunc, *newIterables)
     return inner
 
-def str_parallel(function, nThreads=5, chunksize=1, pbar=True, total=None, position=None):
+def gparallel(function, nThreads=5, chunksize=1, pbar=True, total=None, position=None):
     @wraps(function)
     def inner(iterable, **kwargs):
         with closing(multiprocessing.Pool(processes=nThreads, maxtasksperchild=1000)) as pool:
@@ -90,7 +91,7 @@ def str_parallel(function, nThreads=5, chunksize=1, pbar=True, total=None, posit
     return inner
     
         
-def str_reduce(iterable, reduceFun, logFun, loggingRate=None):
+def greduce(iterable, reduceFun, logFun, loggingRate=None):
     if loggingRate is None:
         if hasattr(iterable, '__len__'):
             loggingRate = len(iterable)/10
@@ -111,7 +112,7 @@ def reduction_wrapper(function, logFun, loggingRate):
     return inner
                     
 
-def str_groupBy(data, key, pbar=False):
+def ggroupBy(data, key, pbar=False):
     grouped = defaultdict(list)
     if pbar:
         newData = config['pbarFun'](data)

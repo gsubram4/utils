@@ -6,23 +6,39 @@ Created on Wed May  6 09:28:22 2015
 import sys, time
 import numpy as np
 import matplotlib.pyplot as plt
-import cPickle as pickle
+#import cPickle as pickle
+from six.moves import cPickle as pickle
 from datetime import datetime
 import locale
 import string
 import matplotlib as mpl
 import json
-import dill
+#import dill
+from itertools import islice, chain
+from six import next
 
 
 def fig(num=None,figsize=None):
     plt.figure(num,figsize=figsize)
     plt.clf()
     
+def batch(iterable, size):
+    sourceiter = iter(iterable)
+    while True:
+        batchiter = islice(sourceiter, size)
+        try:
+            yield chain([next(batchiter)], batchiter)
+        except StopIteration:
+            return
+
+
 def setFontsize(ax,size=18, weight='regular'):
     for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] + ax.get_xticklabels() + ax.get_yticklabels()):
         item.set_fontsize(size)
         item.set_fontweight(weight)
+        
+def unix_time_secs(dt):
+    return (dt-datetime(1970,1,1)).total_seconds()
         
 def unix_time_millis(dt):
     return (dt-datetime(1970,1,1)).total_seconds()
@@ -45,6 +61,7 @@ def loadJSON(fname):
         data = json.load(fp)
     return data
 
+"""
 def saveDill(fname, dataVar):
     with open(fname, 'w') as fp:
         dill.dump(dataVar, fp)
@@ -53,6 +70,7 @@ def loadDill(fname):
     with open(fname, 'rb') as fp:
         dataVar = dill.load(fp)
     return dataVar
+"""
 
 def cdfPlot(x,normalize=True,label='',col=None,lw=3,zorder=0,alpha=1, ls='solid'):
     if col==None:
@@ -79,7 +97,7 @@ def stripChars(x):
         nodigs = table.translate(table, string.digits)
         return x.translate(table,nodigs)
     except:
-        print 'Value of x to translate: %s' % x
+        print('Value of x to translate: %s' % x)
             
 
 def sec2str(seconds):
@@ -115,7 +133,12 @@ def progprint(iterator, total=None):
             else:
                 sys.stdout.write('  [ %d ]\n' % (idx+1))
         idx += 1
-    print ''
+    print('')
+
+def render_gallery(images, batch_size=10):
+    rows = [np.concatenate(list(btch), axis=1) for btch in batch(images, batch_size)]
+    rows[-1] = np.pad(rows[-1], pad_width=((0,0),(0,rows[0].shape[1]-rows[-1].shape[1]),(0,0)), mode='constant')
+    return np.vstack(rows)
 
 import numpy
 

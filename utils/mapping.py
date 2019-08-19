@@ -29,8 +29,11 @@ Typical workflow is to use one of the `extent` methods to construct an
 space.  Then construct a :class:`Plotter` object to actually draw the tiles.
 This object can then be used to plot the basemap to a `matplotlib` axes object.
 """
-
+from __future__ import print_function, absolute_import
+from six.moves import map
+import numpy as np
 import math as _math
+from .distanceCalculator import translate_lonlat
 
 _EPSG_RESCALE = 20037508.342789244
 
@@ -228,8 +231,8 @@ class Extent(_BaseExtent):
     @staticmethod
     def from_lonlat(longitude_min, longitude_max, latitude_min, latitude_max):
         """Construct a new instance from longitude/latitude space."""
-        xmin, ymin = to_web_mercator(longitude_min, latitude_max)
-        xmax, ymax = to_web_mercator(longitude_max, latitude_min)
+        xmin, ymax = to_web_mercator(longitude_min, latitude_min)
+        xmax, ymin = to_web_mercator(longitude_max, latitude_max)
         return Extent(xmin, xmax, ymin, ymax)
 
     @staticmethod
@@ -239,10 +242,17 @@ class Extent(_BaseExtent):
         xmax, ymax = _from_3857(xmax, ymax)
         ex = Extent(xmin, xmax, ymin, ymax)
         return ex.to_project_3857()
+    
+    @staticmethod
+    def from_trajectory(longitudes, latitudes):
+        coordinates_web_mercator = np.array(list(map(to_web_mercator, longitudes, latitudes)))
+        xmin, ymin = np.min(coordinates_web_mercator, axis=0)
+        xmax, ymax = np.max(coordinates_web_mercator, axis=0)
+        return Extent(xmin, xmax, ymin, ymax)
 
     def get_lonlat_extent(self):
-        min_lon, min_lat = to_lonlat(self._xmin, self._ymin)
-        max_lon, max_lat = to_lonlat(self._xmax, self._ymax)
+        min_lon, max_lat = to_lonlat(self._xmin, self._ymin)
+        max_lon, min_lat = to_lonlat(self._xmax, self._ymax)
         return (min_lon, max_lon, min_lat, max_lat)
 
     def __repr__(self):
@@ -277,6 +287,18 @@ class Extent(_BaseExtent):
         :return: A new instance of :class:`Extent`
         """
         return self.clone("normal")
+    
+    def to_square(self):
+        x_width = (self._xmax - self._xmin)
+        y_width  = (self._ymax - self._ymin)
+        x_margin = y_width - x_width
+        y_margin = x_width - y_width
+        if x_margin > 0:
+            return Extent(self._xmin - x_margin/2., self._xmax + x_margin/2., self._ymin, self._ymax)
+        elif y_margin > 0:
+            return Extent(self._xmin, self._xmax, self._ymin - y_margin/2. , self._ymax + y_margin/2.)
+        else:
+            return Extent(self._xmin, self._xmax, self._ymin, self._ymax)
 
     def with_center(self, xc, yc):
         """Create a new :class:`Extent` object with the centre moved to these
@@ -294,6 +316,18 @@ class Extent(_BaseExtent):
             ymax = 1
         return Extent(self._xmin + xc - oldxc, self._xmax + xc - oldxc,
             ymin, ymax, self._project_str)
+
+    def with_margin_km(self, margin):
+        """Create a new :class:'Extent` object with additional margin
+        """
+        coords = np.zeros((2,2))
+        coords[0,:] = to_lonlat(self._xmin, self._ymin)
+        coords[1,:] = to_lonlat(self._xmax, self._ymax)
+        longitude_min, latitude_min = np.min(coords, axis=0)
+        longitude_max, latitude_max = np.max(coords, axis=0)
+        new_longitude_min, new_latitude_min = translate_lonlat(longitude_min, latitude_min, -1*margin)
+        new_longitude_max, new_latitude_max = translate_lonlat(longitude_max, latitude_max, margin)
+        return Extent.from_lonlat(new_longitude_min, new_longitude_max, new_latitude_min, new_latitude_max)
 
     def with_center_lonlat(self, longitude, latitude):
         """Create a new :class:`Extent` object with the centre the given

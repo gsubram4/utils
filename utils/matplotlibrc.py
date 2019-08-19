@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Nov  4 09:57:19 2014
-
-@author: scott.philips
-"""
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
